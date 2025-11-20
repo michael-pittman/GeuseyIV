@@ -1,0 +1,5 @@
+{
+  "name": "Neo-Sprite Chat 3D",
+  "description": "A Three.js experience featuring floating CSS3D sprites with a mixed-aesthetic chat interface (Glassmorphism, Neumorphism, Neobrutalism).",
+  "requestFramePermissions": []
+}

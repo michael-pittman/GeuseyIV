@@ -1,11 +1,110 @@
-<div align="center">
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+# Neo-Sprite Chat 3D (Geuse.io)
 
-  <h1>Built with AI Studio</h2>
+A futuristic, immersive 3D web experience featuring a hardware-accelerated CSS3D particle system and a "Liquid Glass" chat interface. This project blends **Three.js**, **React**, and advanced **Tailwind CSS** styling to create a unique visual aesthetic combining Glassmorphism, Neumorphism, and Neobrutalism.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🌟 Features
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+### 3D Background System
+- **Engine**: Built on `Three.js` using the `CSS3DRenderer` to manipulate 512 HTML DOM elements in 3D space.
+- **Geometries**: Supports multiple geometric transitions:
+  - **Plane**: Sinusoidal wave surface.
+  - **Cube**: 8x8x8 volume grid.
+  - **Sphere**: Spherical coordinate distribution.
+  - **Spiral**: Conical 3D spiral.
+  - **Fibonacci**: Golden angle spherical distribution.
+  - **Random**: Chaotic distribution.
+- **Animation**:
+  - "Breathing" scale animation synced to coordinate positions.
+  - Dynamic speed adjustment based on theme (Slower/Hypnotic in Dark Mode).
+  - **Camera Integration**: The camera smoothly zooms out (dolly effect) when the chat window opens to frame the UI.
 
-</div>
+### UI / UX (iOS26 Concept)
+- **Aesthetic**: "Liquid Glass" — High transparency, backdrop blur, and subtle borders replacing solid backgrounds.
+- **Chat Interface**:
+  - **Floating Modal**: Draggable-style fixed position widget.
+  - **Header**: "Dynamic Island" inspired with traffic light controls and typewriter contact link.
+  - **Visuals**: Mixed styling with Neobrutalist hard shadows on glass substrates.
+  - **Controls**: Integrated "Send" button inside the input field with Neumorphic pressed states.
+- **Themes**: Fully responsive Light/Dark mode toggled via a Neumorphic switch.
+
+### Integration
+- **Chatbot**: Connected to `n8n` workflow via Webhook.
+- **Contact**: Direct "Typewriter" style mailto link for Geuse.io inquiries.
+
+## 🛠 Tech Stack
+
+- **Frontend**: React 19, TypeScript
+- **3D**: Three.js (CSS3DRenderer)
+- **Styling**: Tailwind CSS
+- **Build Tool**: Vite (Recommended for local dev)
+
+## 🚀 Development Guide (Cursor IDE)
+
+This project is optimized for development in **Cursor**.
+
+### 1. Setup
+If migrating from a web sandbox, initialize a standard Vite project:
+
+```bash
+npm create vite@latest neo-sprite-chat -- --template react-ts
+cd neo-sprite-chat
+npm install three @types/three @tweenjs/tween.js
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+*Copy the `src` components into your new project structure.*
+
+### 2. Environment Variables
+Create a `.env` file in the root directory to secure your configuration:
+
+```env
+VITE_WEBHOOK_URL=https://n8n.geuse.io/webhook/5bdd4f4f-81fc-459b-a294-8fb800514dfb
+```
+
+### 3. Running Locally
+```bash
+npm run dev
+```
+
+## ☁️ Deployment (AWS S3)
+
+This project is designed to be hosted as a static site on AWS S3.
+
+### Build
+Generate the production-ready static files:
+
+```bash
+npm run build
+```
+*This creates a `dist` folder containing optimized HTML, CSS, and JS.*
+
+### S3 Hosting Steps
+1. **Create Bucket**: Create a new S3 bucket (e.g., `chat.geuse.io`).
+2. **Properties**: Enable "Static website hosting" in the bucket properties.
+3. **Permissions**:
+   - Uncheck "Block all public access".
+   - Add a Bucket Policy for public read access:
+     ```json
+     {
+         "Version": "2012-10-17",
+         "Statement": [
+             {
+                 "Sid": "PublicReadGetObject",
+                 "Effect": "Allow",
+                 "Principal": "*",
+                 "Action": "s3:GetObject",
+                 "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/*"
+             }
+         ]
+     }
+     ```
+4. **Upload**: Upload the contents of the `dist` folder to the root of the bucket.
+
+### HTTPS (Recommended)
+For a production-grade "Liquid Glass" experience, serve the S3 bucket via **AWS CloudFront** to enable HTTPS and faster global content delivery.
+
+## 📄 License
+
+[MIT](LICENSE)
