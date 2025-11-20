@@ -87,9 +87,8 @@ export const Scene: React.FC = () => {
       const image = document.createElement('img');
       image.src = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/sprite.png';
       
-      // Responsive Particle Count
-      const isMobile = window.innerWidth < 768;
-      const particleCount = isMobile ? 256 : 512;
+      // Fixed Particle Count (Reverted from mobile logic)
+      const particleCount = 512;
 
       image.onload = () => {
         for (let i = 0; i < particleCount; i++) {
@@ -122,7 +121,7 @@ export const Scene: React.FC = () => {
         }
 
         // 3. Define Layouts
-        createTargets(isMobile);
+        createTargets();
         
         // 4. Start Animation Loop
         transition();
@@ -143,11 +142,11 @@ export const Scene: React.FC = () => {
       window.addEventListener('resize', onWindowResize);
     };
 
-    const createTargets = (isMobile: boolean) => {
+    const createTargets = () => {
         const l = objectsRef.current.length;
         
         // --- Plane ---
-        const amountX = isMobile ? 8 : 16; // Reduced width for mobile (8*32=256 vs 16*32=512)
+        const amountX = 16;
         const amountZ = 32;
         const separationPlane = 150;
         const offsetX = ((amountX - 1) * separationPlane) / 2;
@@ -173,18 +172,10 @@ export const Scene: React.FC = () => {
         for (let i = 0; i < l; i++) {
             const object = new THREE.Object3D();
             
-            // 8x8 base grid.
-            // For 512 (Desktop): 8x8x8. Z layers = 8.
-            // For 256 (Mobile): 8x8x4. Z layers = 4.
-            
+            // 8x8x8 Grid (Fixed)
             const x = (i % 8) * 150 - 525;
             const y = (Math.floor(i / 8) % 8) * 150 - 525;
-            
-            // Calculate Z centering offset based on layer count
-            const zLayers = isMobile ? 4 : 8;
-            const zOffset = ((zLayers - 1) * 150) / 2;
-            
-            const z = (Math.floor(i / 64)) * 150 - zOffset;
+            const z = (Math.floor(i / 64)) * 150 - 525;
             
             object.position.set(x, y, z);
             object.rotation.set(0, 0, 0);
