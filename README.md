@@ -1,5 +1,5 @@
 
-# Neo-Sprite Chat 3D (Geuse.io)
+# GeuseIV (Neo-Sprite Chat 3D)
 
 A futuristic, immersive 3D web experience featuring a hardware-accelerated CSS3D particle system and a "Liquid Glass" chat interface. This project blends **Three.js**, **React**, and advanced **Tailwind CSS** styling to create a unique visual aesthetic combining Glassmorphism, Neumorphism, and Neobrutalism.
 
@@ -37,33 +37,37 @@ A futuristic, immersive 3D web experience featuring a hardware-accelerated CSS3D
 - **Frontend**: React 19, TypeScript
 - **3D**: Three.js (CSS3DRenderer)
 - **Styling**: Tailwind CSS
-- **Build Tool**: Vite (Recommended for local dev)
+- **Build Tool**: Vite
 
 ## 🚀 Development Guide (Cursor IDE)
 
 This project is optimized for development in **Cursor**.
 
-### 1. Setup
-If migrating from a web sandbox, initialize a standard Vite project:
+### 1. Clone & Setup
+Clone the repository to your local machine:
 
 ```bash
-npm create vite@latest neo-sprite-chat -- --template react-ts
-cd neo-sprite-chat
-npm install three @types/three @tweenjs/tween.js
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+git clone https://github.com/YOUR_USERNAME/GeuseIV.git
+cd GeuseIV
 ```
 
-*Copy the `src` components into your new project structure.*
+### 2. Install Dependencies
+Install the required packages (Three.js, React, Tailwind, Tween.js):
 
-### 2. Environment Variables
-Create a `.env` file in the root directory to secure your configuration:
+```bash
+npm install
+```
+
+### 3. Environment Variables
+Create a `.env` file in the root directory to configure the webhook:
 
 ```env
 VITE_WEBHOOK_URL=https://n8n.geuse.io/webhook/5bdd4f4f-81fc-459b-a294-8fb800514dfb
 ```
 
-### 3. Running Locally
+### 4. Running Locally
+Start the development server:
+
 ```bash
 npm run dev
 ```
