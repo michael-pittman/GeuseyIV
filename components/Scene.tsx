@@ -5,10 +5,14 @@ import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import TWEEN from 'three/addons/libs/tween.module.js';
 import { ThemeContext, Theme, LayoutContext } from '../types';
 
+// Separate TWEEN group for camera - won't be affected by particle TWEEN.removeAll()
+const cameraTweenGroup = new TWEEN.Group();
+
 export const Scene: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const objectsRef = useRef<CSS3DSprite[]>([]); // Store objects in ref to access across hooks
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null); // Ref for camera
+  const isInitializedRef = useRef(false); // Track if scene has been initialized
   const { theme } = useContext(ThemeContext);
   const { isChatOpen } = useContext(LayoutContext);
   const themeRef = useRef(theme);
@@ -17,8 +21,9 @@ export const Scene: React.FC = () => {
   useEffect(() => {
     themeRef.current = theme;
 
-    // Dynamically update opacity of existing sprites when theme changes
-    const opacity = theme === Theme.LIGHT ? '1' : '0.75';
+    // Update opacity when theme changes
+    const opacity = theme === Theme.DARK ? '0.9' : '1';
+
     objectsRef.current.forEach((obj) => {
         const element = obj.element as HTMLElement;
         const img = element.querySelector('img');
@@ -28,16 +33,18 @@ export const Scene: React.FC = () => {
     });
   }, [theme]);
 
-  // New Effect for Camera Zoom based on Chat State
+  // Camera Zoom based on Chat State - uses separate TWEEN group
   useEffect(() => {
     if (!cameraRef.current) return;
 
-    // Zoom out to 5000 if chat is open, zoom back to 3000 if closed
-    const targetZ = isChatOpen ? 5000 : 3000;
+    const targetZ = isChatOpen ? 4500 : 2500;
 
-    new TWEEN.Tween(cameraRef.current.position)
-      .to({ z: targetZ }, 1500) // 1.5 second duration
-      .easing(TWEEN.Easing.Cubic.InOut)
+    // Clear previous camera tweens only
+    cameraTweenGroup.removeAll();
+
+    new TWEEN.Tween(cameraRef.current.position, cameraTweenGroup)
+      .to({ z: targetZ }, 2000)
+      .easing(TWEEN.Easing.Cubic.Out)
       .start();
 
   }, [isChatOpen]);
@@ -45,13 +52,18 @@ export const Scene: React.FC = () => {
   // 2. Initialize Scene (Run once)
   useEffect(() => {
     if (!containerRef.current) return;
+    
+    // Prevent double initialization in React StrictMode
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
 
     let camera: THREE.PerspectiveCamera;
     let scene: THREE.Scene;
     let renderer: CSS3DRenderer;
     let controls: TrackballControls;
+    let animationId: number;
 
-    // Clear existing objects if re-running (though StrictMode might trigger this, we want to persist ref)
+    // Clear existing objects
     objectsRef.current = []; 
 
     const targets: { [key: string]: THREE.Object3D[] } = {
@@ -71,38 +83,57 @@ export const Scene: React.FC = () => {
     // Animation Timing State
     let lastTime = Date.now();
     let elapsed = 0;
+    let needsRender = true; // Track if render is needed
+    let frameSkip = 0; // Frame skipping for performance
+    const targetFPS = 60;
+    const frameTime = 1000 / targetFPS;
 
     const init = () => {
       const container = containerRef.current;
       if (!container) return;
 
-      // 1. Camera
+      // 1. Camera - Adjusted to match production view
       camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 10000);
-      camera.position.z = 3000;
+      // Position camera closer and slightly angled to match production scene
+      camera.position.set(0, 200, 2500);
+      camera.lookAt(0, 0, 0);
       cameraRef.current = camera; // Store in ref for zooming
 
       scene = new THREE.Scene();
 
       // 2. Objects (Sprites)
       const image = document.createElement('img');
-      image.src = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/sprite.png';
       
       // Fixed Particle Count (Reverted from mobile logic)
       const particleCount = 512;
+      
+      // Track if sprites have been created to prevent double initialization
+      let spritesCreated = false;
 
       image.onload = () => {
+        // Prevent double initialization in React StrictMode
+        if (spritesCreated || objectsRef.current.length > 0) {
+          console.log('Sprites already created, skipping initialization');
+          return;
+        }
+        spritesCreated = true;
+        
+        console.log(`Creating ${particleCount} sprites...`);
         for (let i = 0; i < particleCount; i++) {
           const domElement = document.createElement('div');
-          domElement.style.width = '80px'; 
-          domElement.style.height = '80px';
+          domElement.style.width = '120px'; 
+          domElement.style.height = '120px';
+          
+          // Performance optimizations for smooth animations
+          domElement.style.willChange = 'transform';
+          domElement.style.backfaceVisibility = 'hidden';
+          domElement.style.transformStyle = 'preserve-3d';
           
           const imgElement = image.cloneNode() as HTMLImageElement;
           imgElement.style.width = '100%';
           imgElement.style.height = '100%';
           
-          // Set initial opacity based on current theme ref
-          // Light Mode = 1 (Full opacity), Dark Mode = 0.75 (Slightly transparent)
-          imgElement.style.opacity = themeRef.current === Theme.LIGHT ? '1' : '0.75';
+          imgElement.style.opacity = themeRef.current === Theme.DARK ? '0.9' : '1';
           
           domElement.appendChild(imgElement);
 
@@ -127,18 +158,72 @@ export const Scene: React.FC = () => {
         transition();
         animate();
       };
+      
+      image.onerror = () => {
+        console.error('🖼️ Failed to load sprite image');
+        // Create sprites with a fallback colored div if image fails
+        if (spritesCreated) return;
+        spritesCreated = true;
+        
+        for (let i = 0; i < particleCount; i++) {
+          const domElement = document.createElement('div');
+          domElement.style.width = '120px'; 
+          domElement.style.height = '120px';
+          domElement.style.backgroundColor = themeRef.current === Theme.DARK ? '#9999bb' : '#cccccc';
+          domElement.style.borderRadius = '50%';
+          domElement.style.opacity = themeRef.current === Theme.DARK ? '0.9' : '1';
+          
+          // Performance optimizations for smooth animations
+          domElement.style.willChange = 'transform';
+          domElement.style.backfaceVisibility = 'hidden';
+          domElement.style.transformStyle = 'preserve-3d';
+          
+          const object = new CSS3DSprite(domElement);
+          
+          object.position.x = Math.random() * 4000 - 2000;
+          object.position.y = Math.random() * 4000 - 2000;
+          object.position.z = Math.random() * 4000 - 2000;
+          
+          object.userData = { randomOffset: Math.random() * Math.PI * 2 };
+          
+          scene.add(object);
+          objectsRef.current.push(object);
+        }
+        
+        createTargets();
+        transition();
+        animate();
+      };
+      
+      // Start loading the image
+      image.src = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/sprite.png';
 
       // 5. Renderer
       renderer = new CSS3DRenderer();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      
+      // Enable pointer events for smooth interaction
+      renderer.domElement.style.pointerEvents = 'auto';
+      renderer.domElement.style.touchAction = 'none'; // Prevent default touch gestures for better control
+      
       container.appendChild(renderer.domElement);
 
-      // 6. Controls
+      // 6. Controls - Optimized for smooth pointer/touch interaction
       controls = new TrackballControls(camera, renderer.domElement);
       controls.minDistance = 500;
       controls.maxDistance = 6000;
-      controls.rotateSpeed = 0.5;
+      controls.rotateSpeed = 2.0;
+      controls.zoomSpeed = 1.2;
+      controls.panSpeed = 0.8;
+      controls.dynamicDampingFactor = 0.2;
       
+      // Enhanced touch/pointer responsiveness
+      controls.noRotate = false;
+      controls.noZoom = false;
+      controls.noPan = false;
+      controls.staticMoving = false; // Enable smooth momentum
+      controls.enabled = true;
+
       window.addEventListener('resize', onWindowResize);
     };
 
@@ -254,37 +339,78 @@ export const Scene: React.FC = () => {
     const transition = () => {
         const keys = Object.keys(targets);
         let nextIndex = Math.floor(Math.random() * keys.length);
-        
+
         if (keys.length > 1) {
             while(nextIndex === currentLayoutIndex) {
                 nextIndex = Math.floor(Math.random() * keys.length);
             }
         }
         currentLayoutIndex = nextIndex;
-        
+
         const key = keys[currentLayoutIndex];
         const currentTargets = targets[key];
         const objects = objectsRef.current;
 
         TWEEN.removeAll();
+        needsRender = true; // Force render during transitions
 
-        for (let i = 0; i < objects.length; i++) {
+        // Calculate center of mass for distance-based stagger
+        let centerX = 0, centerY = 0, centerZ = 0;
+        const objectCount = objects.length;
+        for (let i = 0; i < objectCount; i++) {
+            centerX += objects[i].position.x;
+            centerY += objects[i].position.y;
+            centerZ += objects[i].position.z;
+        }
+        centerX /= objectCount;
+        centerY /= objectCount;
+        centerZ /= objectCount;
+
+        // Find max distance for normalization
+        let maxDistance = 0;
+        const distances: number[] = [];
+        for (let i = 0; i < objectCount; i++) {
+            const dx = objects[i].position.x - centerX;
+            const dy = objects[i].position.y - centerY;
+            const dz = objects[i].position.z - centerZ;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            distances[i] = dist;
+            if (dist > maxDistance) maxDistance = dist;
+        }
+
+        // Maximum stagger delay (creates radial wave effect)
+        const maxStaggerDelay = 600;
+
+        for (let i = 0; i < objectCount; i++) {
             const object = objects[i];
             const target = currentTargets[i];
 
+            if (!object || !target) continue;
+
+            // Distance-based stagger: particles closer to center start first
+            const normalizedDistance = maxDistance > 0 ? distances[i] / maxDistance : 0;
+            const staggerDelay = normalizedDistance * maxStaggerDelay;
+
+            // Reduced random variation for more predictable motion
+            const duration = transitionDuration + (Math.random() * transitionDuration * 0.2);
+
             new TWEEN.Tween(object.position)
-                .to({ x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * transitionDuration + transitionDuration)
-                .easing(TWEEN.Easing.Exponential.InOut)
+                .to({ x: target.position.x, y: target.position.y, z: target.position.z }, duration)
+                .easing(TWEEN.Easing.Cubic.Out) // Smooth deceleration without overshoot
+                .delay(staggerDelay)
+                .onUpdate(() => { needsRender = true; })
                 .start();
 
             new TWEEN.Tween(object.rotation)
-                .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * transitionDuration + transitionDuration)
-                .easing(TWEEN.Easing.Exponential.InOut)
+                .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, duration)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .delay(staggerDelay)
+                .onUpdate(() => { needsRender = true; })
                 .start();
         }
 
         new TWEEN.Tween({})
-            .to({}, displayDuration + transitionDuration * 2)
+            .to({}, displayDuration + transitionDuration * 2 + maxStaggerDelay)
             .onComplete(transition)
             .start();
     };
@@ -294,39 +420,70 @@ export const Scene: React.FC = () => {
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
+    
+    // Breathing animation - synchronized wave pattern based on distance from center
+    const updateObjectScales = (objects: CSS3DSprite[], elapsedTime: number, count: number) => {
+      for (let i = 0; i < count; i++) {
+        const object = objects[i];
+        if (object && object.scale && object.position) {
+          // Distance from center creates radial wave pattern
+          const distance = Math.sqrt(
+            object.position.x * object.position.x +
+            object.position.y * object.position.y +
+            object.position.z * object.position.z
+          );
+
+          // Phase based on distance - creates expanding/contracting rings
+          const phase = distance * 0.002;
+
+          // Single frequency wave - all particles in sync based on their distance
+          const wave = Math.sin(elapsedTime * 1.2 - phase) * 0.25;
+          const targetScale = 1.0 + wave;
+
+          if (object.userData.currentScale === undefined) {
+            object.userData.currentScale = 1.0;
+          }
+
+          object.userData.currentScale += (targetScale - object.userData.currentScale) * 0.15;
+          object.scale.setScalar(object.userData.currentScale);
+        }
+      }
+    };
 
     const animate = () => {
-      requestAnimationFrame(animate);
-      TWEEN.update();
+      animationId = requestAnimationFrame(animate);
+      
+      const now = performance.now();
+      const delta = now - lastTime;
+      
+      // Cap delta to prevent large jumps (e.g., tab switching)
+      const cappedDelta = Math.min(delta, 100);
+      lastTime = now;
+      const deltaSeconds = cappedDelta / 1000;
+
+      // Update controls (always needed for smooth interaction)
       controls.update();
       
-      const now = Date.now();
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+      // Update all tweens (particles + camera)
+      TWEEN.update();
+      cameraTweenGroup.update();
 
-      const isDark = themeRef.current === Theme.DARK;
-      // Speed Adjustment: Light = 1.0, Dark = 0.7
-      const themeSpeedMultiplier = isDark ? 0.7 : 1.0; 
-      
-      elapsed += delta * themeSpeedMultiplier;
+      // Check if we need to render
+      const hasActiveTweens = TWEEN.getAll().length > 0 || cameraTweenGroup.getAll().length > 0;
+      needsRender = hasActiveTweens;
 
+      elapsed += deltaSeconds;
+
+      // Optimize scale calculations - update every frame but batch operations
+      frameSkip++;
       const objects = objectsRef.current;
-      for (let i = 0; i < objects.length; i++) {
-         const object = objects[i];
-         if (object && object.scale && object.position) {
-             const positionFactor = (object.position.x + object.position.z) * 0.001;
- 
-             const timeFactor = elapsed * 1.0;
-             const baseAnimation = Math.sin(positionFactor + timeFactor) * 0.3 + 1.0;
- 
-             const randomOffset = object.userData.randomOffset || 0;
-             const variation = Math.sin(elapsed * 0.8 + randomOffset) * 0.1;
- 
-             const finalScale = baseAnimation + variation;
-             object.scale.setScalar(finalScale);
-         }
+      const objectCount = objects.length;
+      
+      if (objectCount > 0) {
+        updateObjectScales(objects, elapsed, objectCount);
       }
 
+      // Always render for smooth animation, but optimize when possible
       renderer.render(scene, camera);
     };
 
@@ -335,12 +492,34 @@ export const Scene: React.FC = () => {
     return () => {
       window.removeEventListener('resize', onWindowResize);
       TWEEN.removeAll();
-      if (containerRef.current) {
-          containerRef.current.innerHTML = '';
+      cameraTweenGroup.removeAll();
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      // Only cleanup if we're actually unmounting (not just StrictMode re-run)
+      // Don't reset isInitializedRef here to prevent double initialization
+      if (containerRef.current && containerRef.current.parentNode) {
+          // Only clear if container still exists and has parent
+          const rendererElement = containerRef.current.querySelector('div[style*="overflow: hidden"]');
+          if (rendererElement && rendererElement.parentNode === containerRef.current) {
+            containerRef.current.removeChild(rendererElement);
+          }
+      }
+      // Clear scene objects
+      if (scene) {
+        while(scene.children.length > 0) {
+          scene.remove(scene.children[0]);
+        }
       }
       objectsRef.current = [];
     };
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full pointer-events-auto" id="css3d-container" />;
+  return (
+    <div
+      ref={containerRef}
+      className="absolute inset-0 w-full h-full"
+      id="css3d-container"
+    />
+  );
 };

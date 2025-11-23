@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body, html, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace; /* Tech/Brutal feel */
+  background-color: rgb(20, 20, 22); /* Fallback */
+}
+
+/* Ensure CSS3D Renderer elements don't capture all clicks unless intended */
+#css3d-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  /* Performance optimizations for smooth animations */
+  contain: content;
+  will-change: contents;
+}
+

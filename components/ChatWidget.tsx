@@ -9,14 +9,20 @@ const WEBHOOK_URL = ENV_WEBHOOK || 'https://n8n.geuse.io/webhook/5bdd4f4f-81fc-4
 const ICON_IDLE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-glitch_151x151.gif?v=1701466761';
 const ICON_ACTIVE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-fire_151x151.gif?v=1701466768';
 
+// Generate a unique session ID
+const generateSessionId = () => {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
 export const ChatWidget: React.FC = () => {
   const { isChatOpen, setChatOpen } = useContext(LayoutContext);
   const [messages, setMessages] = useState<Message[]>([
-    { id: 'init', text: 'Welcome to Mac OS X. How can I help?', sender: 'bot', timestamp: new Date() }
+    { id: 'init', text: 'Hello its Geusey, what do you want to build?', sender: 'bot', timestamp: new Date() }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sessionIdRef = useRef<string>(generateSessionId());
 
   // Preload Active Icon Image to prevent flickering
   useEffect(() => {
@@ -47,23 +53,48 @@ export const ChatWidget: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch(WEBHOOK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ 
+          sessionId: sessionIdRef.current,
           message: userMsg.text,
           text: userMsg.text,
           chatInput: userMsg.text 
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       let replyText = "Connection lost.";
       
       if (response.ok) {
-        const data: ChatResponse = await response.json();
-        replyText = data.output || data.text || data.message || (data as any).response || "Empty response";
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          const data: ChatResponse = await response.json();
+          // Handle various n8n response formats
+          replyText = data.output || data.text || data.message || data.response || 
+                     data.chatOutput || data.reply || data.answer || 
+                     (Array.isArray(data) && data[0]?.json?.output) ||
+                     (data.json && (data.json.output || data.json.text || data.json.message)) ||
+                     JSON.stringify(data);
+        } else {
+          // Handle non-JSON responses
+          const text = await response.text();
+          replyText = text || "Received empty response from server.";
+        }
       } else {
-        replyText = `Error ${response.status}: Server unavailable.`;
+        const errorText = await response.text().catch(() => '');
+        replyText = `⚠️ Error ${response.status}: ${errorText || response.statusText || 'Server unavailable'}`;
       }
 
       const botMsg: Message = {
@@ -74,10 +105,22 @@ export const ChatWidget: React.FC = () => {
       };
       setMessages(prev => [...prev, botMsg]);
 
-    } catch (error) {
+    } catch (error: any) {
+      let errorMessage = "🔌 Network Error: Could not connect to server.";
+
+      if (error.name === 'AbortError') {
+        errorMessage = "⏱️ Request timeout: The server took too long to respond.";
+      } else if (error.message) {
+        errorMessage = `🔌 Network Error: ${error.message}`;
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage = "📡 Network Error: Failed to connect. Please check your connection.";
+      }
+      
+      console.error('❌ Webhook error:', error);
+      
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
-        text: "Network Error: Could not connect to server.",
+        text: errorMessage,
         sender: 'bot',
         timestamp: new Date(),
       };
@@ -135,18 +178,15 @@ export const ChatWidget: React.FC = () => {
             </div>
 
             {/* Absolute Centered Title */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[14px] font-medium tracking-wide text-black/60 dark:text-white/70">
-              iChat
-            </div>
+            <a 
+              href="mailto:info@geuse.io?subject=Geuse.io%20Inquiry&body=I%20would%20like%20your%20services%20to..."
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[14px] font-mono tracking-widest text-black/60 dark:text-white/70 hover:text-blue-600 dark:hover:text-blue-400 transition-colors no-underline pointer-events-auto uppercase"
+            >
+              GESUE
+            </a>
 
-            {/* Theme Toggle & GEUSE Link (Right Justified) */}
+            {/* Theme Toggle (Right Justified) */}
             <div className="flex items-center justify-end z-10 gap-3">
-               <a 
-                 href="mailto:info@geuse.io?subject=Geuse.io%20Inquiry&body=I%20would%20like%20your%20services%20to..."
-                 className="font-mono text-[10px] tracking-widest text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors uppercase no-underline pointer-events-auto"
-               >
-                 GESUE
-               </a>
                <div className="transform scale-75 origin-right pointer-events-auto">
                  <ThemeToggle />
                </div>
@@ -257,7 +297,6 @@ export const ChatWidget: React.FC = () => {
         className="
           pointer-events-auto relative w-16 h-16
           transition-transform duration-300 active:scale-90
-          shadow-[8px_8px_20px_0_rgba(0,0,0,0.25),-6px_-6px_15px_0_rgba(255,255,255,0.1)]
           rounded-xl
         "
       >

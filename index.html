@@ -6,64 +6,9 @@
     <meta name="description" content="GEUSE a Highly experienced and multi‐disciplined facilitator who’s adept in technology, business strategy, creative design, and operations." />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>GEUSE</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              neo: {
-                bg: 'rgb(237, 207, 207)',
-                darkBg: 'rgb(20, 20, 22)',
-                accent: '#8855ff',
-              }
-            },
-            boxShadow: {
-              'neu-flat': '9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5)',
-              'neu-pressed': 'inset 6px 6px 10px 0 rgba(163,177,198, 0.7), inset -6px -6px 10px 0 rgba(255,255,255, 0.8)',
-              'neu-flat-dark': '5px 5px 10px #1f1f1f, -5px -5px 10px #3b3b3b',
-              'neu-pressed-dark': 'inset 5px 5px 10px #1f1f1f, inset -5px -5px 10px #3b3b3b',
-              'brutal': '4px 4px 0px 0px #000000',
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      body, html, #root {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        font-family: 'Courier New', Courier, monospace; /* Tech/Brutal feel */
-        background-color: rgb(20, 20, 22); /* Fallback */
-      }
-      /* Ensure CSS3D Renderer elements don't capture all clicks unless intended */
-      #css3d-container {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 0;
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "three": "https://aistudiocdn.com/three@^0.181.2/build/three.module.js",
-    "three/addons/": "https://aistudiocdn.com/three@^0.181.2/examples/jsm/",
-    "three/": "https://aistudiocdn.com/three@^0.181.2/"
-  }
-}
-</script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
