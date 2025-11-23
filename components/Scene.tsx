@@ -63,6 +63,10 @@ export const Scene: React.FC = () => {
     let controls: TrackballControls;
     let animationId: number;
     let resizeTimeout: ReturnType<typeof window.setTimeout> | undefined;
+    // Track if component is still mounted to prevent init after unmount
+    let isMounted = true;
+    // Image element for sprite texture (hoisted for cleanup access)
+    const image = document.createElement('img');
 
     // Clear existing objects
     objectsRef.current = []; 
@@ -100,8 +104,6 @@ export const Scene: React.FC = () => {
       scene = new THREE.Scene();
 
       // 2. Objects (Sprites)
-      const image = document.createElement('img');
-
       // Fixed Particle Count (Reverted from mobile logic)
       const particleCount = 512;
 
@@ -134,6 +136,11 @@ export const Scene: React.FC = () => {
 
       // Initialize all sprites and start animation
       const initializeSprites = (contentCreator: () => HTMLElement) => {
+        // Abort if component unmounted before image loaded
+        if (!isMounted) {
+          console.log('Component unmounted, skipping sprite initialization');
+          return;
+        }
         if (spritesCreated || objectsRef.current.length > 0) {
           console.log('Sprites already created, skipping initialization');
           return;
@@ -476,12 +483,26 @@ export const Scene: React.FC = () => {
     }, 100);
 
     return () => {
+      // Mark as unmounted to prevent image callbacks from firing
+      isMounted = false;
+
+      // Abort pending image load
+      image.src = '';
+      image.onload = null;
+      image.onerror = null;
+
       window.removeEventListener('resize', onWindowResize);
       TWEEN.removeAll();
       cameraTweenGroup.removeAll();
       if (animationId) {
         cancelAnimationFrame(animationId);
       }
+
+      // Dispose TrackballControls to remove event listeners
+      if (controls) {
+        controls.dispose();
+      }
+
       // Only cleanup if we're actually unmounting (not just StrictMode re-run)
       // Don't reset isInitializedRef here to prevent double initialization
       if (containerRef.current && containerRef.current.parentNode) {

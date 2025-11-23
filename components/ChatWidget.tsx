@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Message, ChatResponse, LayoutContext } from '../types';
 import { ThemeToggle } from './ThemeToggle';
 
-const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://n8n.geuse.io/webhook/5bdd4f4f-81fc-459b-a294-8fb800514dfb';
+const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL;
+const WEBHOOK_MISSING = !WEBHOOK_URL;
 
 const ICON_IDLE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-glitch_151x151.gif?v=1701466761';
 const ICON_ACTIVE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-fire_151x151.gif?v=1701466768';
@@ -93,12 +94,25 @@ export const ChatWidget: React.FC = () => {
     setInputValue('');
     setIsLoading(true);
 
+    // Fail fast if webhook URL is not configured
+    if (WEBHOOK_MISSING) {
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        text: '⚙️ Chat is not configured. Set VITE_WEBHOOK_URL in your environment.',
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await fetch(WEBHOOK_URL!, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
