@@ -10,6 +10,21 @@ body, html, #root {
   overflow: hidden;
   font-family: 'Courier New', Courier, monospace; /* Tech/Brutal feel */
   background-color: rgb(20, 20, 22); /* Fallback */
+
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Safe area support for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 /* Ensure CSS3D Renderer elements don't capture all clicks unless intended */
@@ -21,7 +36,20 @@ body, html, #root {
   height: 100%;
   z-index: 0;
   /* Performance optimizations for smooth animations */
-  contain: content;
-  will-change: contents;
+  contain: strict;
+}
+
+/* GPU-accelerated sprite class - applied via className for CSS3DRenderer compatibility */
+.css3d-sprite {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  contain: layout style;
+  pointer-events: none;
+}
+
+.css3d-sprite img {
+  image-rendering: optimizeSpeed;
+  pointer-events: none;
 }
 

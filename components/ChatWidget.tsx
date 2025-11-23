@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Message, ChatResponse, LayoutContext } from '../types';
 import { ThemeToggle } from './ThemeToggle';
 
-// Environment Variable Handling (Support for Vite or standard Process Env)
-const ENV_WEBHOOK = (import.meta as any).env?.VITE_WEBHOOK_URL || process.env.REACT_APP_WEBHOOK_URL;
-const WEBHOOK_URL = ENV_WEBHOOK || 'https://n8n.geuse.io/webhook/5bdd4f4f-81fc-459b-a294-8fb800514dfb';
+const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://n8n.geuse.io/webhook/5bdd4f4f-81fc-459b-a294-8fb800514dfb';
 
 const ICON_IDLE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-glitch_151x151.gif?v=1701466761';
 const ICON_ACTIVE = 'https://www.membersoftherage.com/cdn/shop/files/frame-animation-fire_151x151.gif?v=1701466768';
@@ -12,6 +10,29 @@ const ICON_ACTIVE = 'https://www.membersoftherage.com/cdn/shop/files/frame-anima
 // Generate a unique session ID
 const generateSessionId = () => {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// Extract text from various n8n response formats
+const parseResponseText = (data: ChatResponse): string => {
+  // Direct string properties (most common)
+  const directFields = ['output', 'text', 'message', 'response', 'chatOutput', 'reply', 'answer'];
+  for (const field of directFields) {
+    if (typeof data[field] === 'string') return data[field];
+  }
+
+  // Nested json object format
+  if (data.json) {
+    for (const field of directFields) {
+      if (typeof data.json[field] === 'string') return data.json[field];
+    }
+  }
+
+  // Array format from n8n
+  if (Array.isArray(data) && data[0]?.json?.output) {
+    return data[0].json.output;
+  }
+
+  return JSON.stringify(data);
 };
 
 export const ChatWidget: React.FC = () => {
@@ -22,6 +43,7 @@ export const ChatWidget: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const sessionIdRef = useRef<string>(generateSessionId());
 
   // Preload Active Icon Image to prevent flickering
@@ -37,6 +59,25 @@ export const ChatWidget: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isChatOpen]);
+
+  // Handle mobile keyboard visibility
+  useEffect(() => {
+    if (!isChatOpen) return;
+
+    const handleViewportResize = () => {
+      // Scroll input into view when virtual keyboard opens
+      if (document.activeElement === inputRef.current) {
+        inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    };
+
+    // Use visualViewport API for better mobile keyboard detection
+    const viewport = window.visualViewport;
+    if (viewport) {
+      viewport.addEventListener('resize', handleViewportResize);
+      return () => viewport.removeEventListener('resize', handleViewportResize);
+    }
+  }, [isChatOpen]);
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -81,12 +122,7 @@ export const ChatWidget: React.FC = () => {
         
         if (contentType && contentType.includes('application/json')) {
           const data: ChatResponse = await response.json();
-          // Handle various n8n response formats
-          replyText = data.output || data.text || data.message || data.response || 
-                     data.chatOutput || data.reply || data.answer || 
-                     (Array.isArray(data) && data[0]?.json?.output) ||
-                     (data.json && (data.json.output || data.json.text || data.json.message)) ||
-                     JSON.stringify(data);
+          replyText = parseResponseText(data);
         } else {
           // Handle non-JSON responses
           const text = await response.text();
@@ -245,12 +281,18 @@ export const ChatWidget: React.FC = () => {
           ">
              <div className="relative w-full">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="iMessage"
                   aria-label="Type a message"
+                  inputMode="text"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
                   className="
                     w-full pl-4 pr-12 py-3
                     bg-white/5 dark:bg-white/5
@@ -266,6 +308,7 @@ export const ChatWidget: React.FC = () => {
              
                 {/* Send Button - Integrated inside Input */}
                 <button
+                    type="button"
                     onClick={handleSend}
                     disabled={!inputValue.trim()}
                     aria-label="Send message"
@@ -292,6 +335,7 @@ export const ChatWidget: React.FC = () => {
 
       {/* Updated Toggle Button */}
       <button
+        type="button"
         onClick={() => setChatOpen(!isChatOpen)}
         aria-label={isChatOpen ? "Close chat" : "Open chat"}
         className="

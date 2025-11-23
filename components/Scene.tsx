@@ -62,6 +62,7 @@ export const Scene: React.FC = () => {
     let renderer: CSS3DRenderer;
     let controls: TrackballControls;
     let animationId: number;
+    let resizeTimeout: ReturnType<typeof window.setTimeout> | undefined;
 
     // Clear existing objects
     objectsRef.current = []; 
@@ -81,12 +82,9 @@ export const Scene: React.FC = () => {
     const displayDuration = 16000;
 
     // Animation Timing State
-    let lastTime = Date.now();
+    let lastTime = performance.now();
     let elapsed = 0;
-    let needsRender = true; // Track if render is needed
-    let frameSkip = 0; // Frame skipping for performance
-    const targetFPS = 60;
-    const frameTime = 1000 / targetFPS;
+    let scaleUpdateFrame = 0; // Counter for throttled scale updates
 
     const init = () => {
       const container = containerRef.current;
@@ -103,96 +101,78 @@ export const Scene: React.FC = () => {
 
       // 2. Objects (Sprites)
       const image = document.createElement('img');
-      
+
       // Fixed Particle Count (Reverted from mobile logic)
       const particleCount = 512;
-      
+
       // Track if sprites have been created to prevent double initialization
       let spritesCreated = false;
 
-      image.onload = () => {
-        // Prevent double initialization in React StrictMode
+      // Helper to create a single sprite with given content
+      const createSprite = (contentCreator: () => HTMLElement): CSS3DSprite => {
+        const domElement = document.createElement('div');
+        domElement.className = 'css3d-sprite';
+        domElement.style.width = '120px';
+        domElement.style.height = '120px';
+        domElement.appendChild(contentCreator());
+
+        const object = new CSS3DSprite(domElement);
+        const x = Math.random() * 4000 - 2000;
+        const y = Math.random() * 4000 - 2000;
+        const z = Math.random() * 4000 - 2000;
+        object.position.set(x, y, z);
+
+        object.userData = {
+          distanceFromCenter: Math.sqrt(x * x + y * y + z * z),
+          currentScale: 1.0
+        };
+
+        scene.add(object);
+        objectsRef.current.push(object);
+        return object;
+      };
+
+      // Initialize all sprites and start animation
+      const initializeSprites = (contentCreator: () => HTMLElement) => {
         if (spritesCreated || objectsRef.current.length > 0) {
           console.log('Sprites already created, skipping initialization');
           return;
         }
         spritesCreated = true;
-        
         console.log(`Creating ${particleCount} sprites...`);
-        for (let i = 0; i < particleCount; i++) {
-          const domElement = document.createElement('div');
-          domElement.style.width = '120px'; 
-          domElement.style.height = '120px';
-          
-          // Performance optimizations for smooth animations
-          domElement.style.willChange = 'transform';
-          domElement.style.backfaceVisibility = 'hidden';
-          domElement.style.transformStyle = 'preserve-3d';
-          
-          const imgElement = image.cloneNode() as HTMLImageElement;
-          imgElement.style.width = '100%';
-          imgElement.style.height = '100%';
-          
-          imgElement.style.opacity = themeRef.current === Theme.DARK ? '0.9' : '1';
-          
-          domElement.appendChild(imgElement);
 
-          const object = new CSS3DSprite(domElement);
-          
-          // Start at Random positions
-          object.position.x = Math.random() * 4000 - 2000;
-          object.position.y = Math.random() * 4000 - 2000;
-          object.position.z = Math.random() * 4000 - 2000;
-          
-          // Add random offset for animation variation
-          object.userData = { randomOffset: Math.random() * Math.PI * 2 };
-          
-          scene.add(object);
-          objectsRef.current.push(object);
+        for (let i = 0; i < particleCount; i++) {
+          createSprite(contentCreator);
         }
 
-        // 3. Define Layouts
         createTargets();
-        
-        // 4. Start Animation Loop
         transition();
         animate();
       };
-      
+
+      image.onload = () => {
+        const opacity = themeRef.current === Theme.DARK ? '0.9' : '1';
+        initializeSprites(() => {
+          const imgElement = image.cloneNode() as HTMLImageElement;
+          imgElement.style.width = '100%';
+          imgElement.style.height = '100%';
+          imgElement.style.opacity = opacity;
+          return imgElement;
+        });
+      };
+
       image.onerror = () => {
         console.error('🖼️ Failed to load sprite image');
-        // Create sprites with a fallback colored div if image fails
-        if (spritesCreated) return;
-        spritesCreated = true;
-        
-        for (let i = 0; i < particleCount; i++) {
-          const domElement = document.createElement('div');
-          domElement.style.width = '120px'; 
-          domElement.style.height = '120px';
-          domElement.style.backgroundColor = themeRef.current === Theme.DARK ? '#9999bb' : '#cccccc';
-          domElement.style.borderRadius = '50%';
-          domElement.style.opacity = themeRef.current === Theme.DARK ? '0.9' : '1';
-          
-          // Performance optimizations for smooth animations
-          domElement.style.willChange = 'transform';
-          domElement.style.backfaceVisibility = 'hidden';
-          domElement.style.transformStyle = 'preserve-3d';
-          
-          const object = new CSS3DSprite(domElement);
-          
-          object.position.x = Math.random() * 4000 - 2000;
-          object.position.y = Math.random() * 4000 - 2000;
-          object.position.z = Math.random() * 4000 - 2000;
-          
-          object.userData = { randomOffset: Math.random() * Math.PI * 2 };
-          
-          scene.add(object);
-          objectsRef.current.push(object);
-        }
-        
-        createTargets();
-        transition();
-        animate();
+        const isDark = themeRef.current === Theme.DARK;
+        initializeSprites(() => {
+          const fallback = document.createElement('div');
+          fallback.style.width = '100%';
+          fallback.style.height = '100%';
+          fallback.style.backgroundColor = isDark ? '#9999bb' : '#cccccc';
+          fallback.style.borderRadius = '50%';
+          fallback.style.opacity = isDark ? '0.9' : '1';
+          return fallback;
+        });
       };
       
       // Start loading the image
@@ -200,7 +180,9 @@ export const Scene: React.FC = () => {
 
       // 5. Renderer
       renderer = new CSS3DRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // Ensure camera aspect ratio is correct before sizing the renderer
+      onWindowResize();
       
       // Enable pointer events for smooth interaction
       renderer.domElement.style.pointerEvents = 'auto';
@@ -352,7 +334,6 @@ export const Scene: React.FC = () => {
         const objects = objectsRef.current;
 
         TWEEN.removeAll();
-        needsRender = true; // Force render during transitions
 
         // Calculate center of mass for distance-based stagger
         let centerX = 0, centerY = 0, centerZ = 0;
@@ -396,16 +377,19 @@ export const Scene: React.FC = () => {
 
             new TWEEN.Tween(object.position)
                 .to({ x: target.position.x, y: target.position.y, z: target.position.z }, duration)
-                .easing(TWEEN.Easing.Cubic.Out) // Smooth deceleration without overshoot
+                .easing(TWEEN.Easing.Cubic.Out)
                 .delay(staggerDelay)
-                .onUpdate(() => { needsRender = true; })
+                .onComplete(() => {
+                  // Update cached distance after transition completes
+                  const pos = object.position;
+                  object.userData.distanceFromCenter = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+                })
                 .start();
 
             new TWEEN.Tween(object.rotation)
                 .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, duration)
                 .easing(TWEEN.Easing.Cubic.Out)
                 .delay(staggerDelay)
-                .onUpdate(() => { needsRender = true; })
                 .start();
         }
 
@@ -416,46 +400,46 @@ export const Scene: React.FC = () => {
     };
 
     const onWindowResize = () => {
+      if (!camera || !renderer) return;
+
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
     
-    // Breathing animation - synchronized wave pattern based on distance from center
+    // Breathing animation - optimized with cached distances and reduced lerp overhead
     const updateObjectScales = (objects: CSS3DSprite[], elapsedTime: number, count: number) => {
+      // Pre-calculate common values outside the loop
+      const timeComponent = elapsedTime * 1.2;
+
       for (let i = 0; i < count; i++) {
         const object = objects[i];
-        if (object && object.scale && object.position) {
-          // Distance from center creates radial wave pattern
-          const distance = Math.sqrt(
-            object.position.x * object.position.x +
-            object.position.y * object.position.y +
-            object.position.z * object.position.z
-          );
+        const userData = object.userData;
 
-          // Phase based on distance - creates expanding/contracting rings
-          const phase = distance * 0.002;
+        // Use cached distance (calculated once per transition, not per frame)
+        const distance = userData.distanceFromCenter || 0;
 
-          // Single frequency wave - all particles in sync based on their distance
-          const wave = Math.sin(elapsedTime * 1.2 - phase) * 0.25;
-          const targetScale = 1.0 + wave;
+        // Phase based on distance - creates expanding/contracting rings
+        const phase = distance * 0.002;
 
-          if (object.userData.currentScale === undefined) {
-            object.userData.currentScale = 1.0;
-          }
+        // Single frequency wave - all particles in sync based on their distance
+        const wave = Math.sin(timeComponent - phase) * 0.25;
+        const targetScale = 1.0 + wave;
 
-          object.userData.currentScale += (targetScale - object.userData.currentScale) * 0.15;
-          object.scale.setScalar(object.userData.currentScale);
-        }
+        // Smooth interpolation with reduced calculation
+        const currentScale = userData.currentScale;
+        const newScale = currentScale + (targetScale - currentScale) * 0.15;
+        userData.currentScale = newScale;
+        object.scale.setScalar(newScale);
       }
     };
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      
+
       const now = performance.now();
       const delta = now - lastTime;
-      
+
       // Cap delta to prevent large jumps (e.g., tab switching)
       const cappedDelta = Math.min(delta, 100);
       lastTime = now;
@@ -463,31 +447,33 @@ export const Scene: React.FC = () => {
 
       // Update controls (always needed for smooth interaction)
       controls.update();
-      
+
       // Update all tweens (particles + camera)
       TWEEN.update();
       cameraTweenGroup.update();
 
-      // Check if we need to render
-      const hasActiveTweens = TWEEN.getAll().length > 0 || cameraTweenGroup.getAll().length > 0;
-      needsRender = hasActiveTweens;
-
       elapsed += deltaSeconds;
 
-      // Optimize scale calculations - update every frame but batch operations
-      frameSkip++;
-      const objects = objectsRef.current;
-      const objectCount = objects.length;
-      
-      if (objectCount > 0) {
-        updateObjectScales(objects, elapsed, objectCount);
+      // Throttle scale updates to every 2nd frame for performance
+      scaleUpdateFrame++;
+      if (scaleUpdateFrame >= 2) {
+        scaleUpdateFrame = 0;
+        const objects = objectsRef.current;
+        const objectCount = objects.length;
+
+        if (objectCount > 0) {
+          updateObjectScales(objects, elapsed, objectCount);
+        }
       }
 
-      // Always render for smooth animation, but optimize when possible
       renderer.render(scene, camera);
     };
 
     init();
+    // Trigger a delayed resize to catch initial landscape loads after setup
+    resizeTimeout = window.setTimeout(() => {
+      onWindowResize();
+    }, 100);
 
     return () => {
       window.removeEventListener('resize', onWindowResize);
@@ -512,6 +498,9 @@ export const Scene: React.FC = () => {
         }
       }
       objectsRef.current = [];
+      if (resizeTimeout !== undefined) {
+        clearTimeout(resizeTimeout);
+      }
     };
   }, []);
 
